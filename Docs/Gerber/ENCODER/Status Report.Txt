@@ -1,0 +1,12 @@
+Output: NC Drill Files
+Type  : NC Drill
+From  : Project [ENCODER.PrjPcb]
+   Generated File[ENCODER.TXT]
+   Generated File[ENCODER.LDP]
+   Generated File[ENCODER.DRR]
+
+
+Files Generated   : 3
+Documents Printed : 0
+
+Finished Output Generation At 9:03:39 PM On 03/15/2016

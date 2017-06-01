@@ -1,0 +1,539 @@
+/*******************************************************
+This program was created by the
+CodeWizardAVR V3.12 Advanced
+Automatic Program Generator
+© Copyright 1998-2014 Pavel Haiduc, HP InfoTech s.r.l.
+http://www.hpinfotech.com
+
+Project : Smart Blender
+Version : 1.0
+Date    : 3/11/2016
+Author  : DTTH
+Company : Newhitek
+Comments: 
+
+
+Chip type               : ATmega8A
+Program type            : Application
+AVR Core Clock frequency: 8.000000 MHz
+Memory model            : Small
+External RAM size       : 0
+Data Stack size         : 256
+*******************************************************/
+
+#include <mega8.h>
+#include <eeprom.h>
+#include <delay.h>
+#include <math.h>
+
+#define     ON              1
+#define     OFF             0
+
+#define     BEEP            PORTD.5
+
+#define     SCLK            PORTD.2
+#define     STR             PORTD.3
+#define     DATA            PORTD.1
+
+#define     UP              PIND.0
+#define     START           PINC.5
+#define     DOWN            PINC.4
+
+#define     MOTOR_SW        PORTB.0
+#define     MOTOR_PUMP      PORTB.2
+#define     MOTOR_BLEND     PORTB.1
+
+#define     LEVEL_CHANNEL           2
+#define     TEMPERATURE_CHANNEL     1
+
+#define     B   3955
+#define     R0  10000
+#define     T0  298.15
+
+void shift_data(unsigned char Data);
+void Display(unsigned char Data);
+unsigned char check_level(void);
+unsigned char read_temperature(void);
+float read_adc(unsigned char adc_input);
+
+// Voltage Reference: AREF pin
+#define ADC_VREF_TYPE ((0<<REFS1) | (0<<REFS0) | (0<<ADLAR))
+
+unsigned char DIGIT[10] = {0xC0, 0xF9, 0xA4, 0xB0, 0x99, 0x92, 0x82, 0xF8, 0x80, 0x90};
+
+unsigned char Set_Turn = 0, Turn = 0, Ratio = 25;
+
+eeprom unsigned char Storage_Turn @0x10;
+eeprom unsigned char Storage_Ratio @0x20;
+
+eeprom unsigned char Storage_Turn = 0;
+eeprom unsigned char Storage_Ratio = 25;
+
+float Rth, T; 
+
+// Analog Comparator interrupt service routine
+interrupt [ANA_COMP] void ana_comp_isr(void)
+{
+    Turn++;
+    delay_ms(10);
+}
+
+unsigned char read_temperature(void)
+{      
+    float templature, volt; 
+    
+    volt = read_adc(TEMPERATURE_CHANNEL);
+     
+    Rth = 10000 * 5 / volt - 10000 ;
+      
+    T = B * T0 / (B + T0 * log(Rth / R0));
+    
+    templature = T - 273.15; 
+    
+    #asm("wdr")
+    
+    return((unsigned char)(templature));
+}
+
+void shift_data(unsigned char Data)
+{
+	unsigned char i;
+    
+	for(i = 0; i < 8; i++)
+	{
+		if((Data & 0x80) == 0x80)
+		{
+			DATA = 1;
+		}
+		else
+		{
+			DATA = 0;
+		}
+
+		SCLK = 0;
+		Data *= 2;
+        #asm("wdr")
+		SCLK = 1;
+	}
+
+	SCLK = 0;
+}
+
+void Display(unsigned char Data)
+{
+    shift_data(DIGIT[Data % 10]);
+    shift_data(DIGIT[Data / 10]);
+    
+    #asm("wdr")
+    
+	STR = 1;
+	delay_ms(1);
+	STR = 0;
+}
+
+float read_adc(unsigned char adc_input)
+{
+    unsigned long int value = 0;
+    int i;
+    float volt;
+
+    ADMUX = adc_input | ADC_VREF_TYPE;  
+    
+    delay_us(10); 
+     
+    for(i = 0; i < 200; i++)
+    {
+        // Start the AD conversion
+        ADCSRA |= (1 << ADSC);
+        // Wait for the AD conversion to complete
+        while ((ADCSRA & (1 << ADIF)) == 0)
+        {
+            #asm("wdr")
+        }
+            
+        ADCSRA |= (1 << ADIF);
+        
+        value += ADCW;
+    }
+    volt = (float)(value) / 200;
+    return (volt * 5 / 1024);
+}
+
+void Setting(void)
+{
+    // Declare your local variables here
+    OSCCAL = 0x9D;
+    // Input/Output Ports initialization
+    // Port B initialization
+    // Function: Bit7=In Bit6=In Bit5=Out Bit4=Out Bit3=Out Bit2=Out Bit1=Out Bit0=Out 
+    DDRB=(0<<DDB7) | (0<<DDB6) | (1<<DDB5) | (1<<DDB4) | (1<<DDB3) | (1<<DDB2) | (1<<DDB1) | (1<<DDB0);
+    // State: Bit7=T Bit6=T Bit5=0 Bit4=0 Bit3=0 Bit2=0 Bit1=0 Bit0=0 
+    PORTB=(0<<PORTB7) | (0<<PORTB6) | (0<<PORTB5) | (0<<PORTB4) | (0<<PORTB3) | (0<<PORTB2) | (0<<PORTB1) | (0<<PORTB0);
+
+    // Port C initialization
+    // Function: Bit6=In Bit5=In Bit4=In Bit3=Out Bit2=In Bit1=In Bit0=In 
+    DDRC=(0<<DDC6) | (0<<DDC5) | (0<<DDC4) | (1<<DDC3) | (0<<DDC2) | (0<<DDC1) | (0<<DDC0);
+    // State: Bit6=T Bit5=T Bit4=T Bit3=0 Bit2=T Bit1=T Bit0=T 
+    PORTC=(0<<PORTC6) | (0<<PORTC5) | (0<<PORTC4) | (0<<PORTC3) | (0<<PORTC2) | (0<<PORTC1) | (0<<PORTC0);
+
+    // Port D initialization
+    // Function: Bit7=In Bit6=In Bit5=Out Bit4=Out Bit3=Out Bit2=Out Bit1=Out Bit0=In 
+    DDRD=(0<<DDD7) | (0<<DDD6) | (1<<DDD5) | (1<<DDD4) | (1<<DDD3) | (1<<DDD2) | (1<<DDD1) | (0<<DDD0);
+    // State: Bit7=T Bit6=T Bit5=0 Bit4=0 Bit3=0 Bit2=0 Bit1=0 Bit0=T 
+    PORTD=(0<<PORTD7) | (0<<PORTD6) | (0<<PORTD5) | (0<<PORTD4) | (0<<PORTD3) | (0<<PORTD2) | (0<<PORTD1) | (0<<PORTD0);
+
+    // Timer/Counter 0 initialization
+    // Clock source: System Clock
+    // Clock value: Timer 0 Stopped
+    TCCR0=(0<<CS02) | (0<<CS01) | (0<<CS00);
+    TCNT0=0x00;
+
+    // Timer/Counter 1 initialization
+    // Clock source: System Clock
+    // Clock value: Timer1 Stopped
+    // Mode: Normal top=0xFFFF
+    // OC1A output: Disconnected
+    // OC1B output: Disconnected
+    // Noise Canceler: Off
+    // Input Capture on Falling Edge
+    // Timer1 Overflow Interrupt: Off
+    // Input Capture Interrupt: Off
+    // Compare A Match Interrupt: Off
+    // Compare B Match Interrupt: Off
+    TCCR1A=(0<<COM1A1) | (0<<COM1A0) | (0<<COM1B1) | (0<<COM1B0) | (0<<WGM11) | (0<<WGM10);
+    TCCR1B=(0<<ICNC1) | (0<<ICES1) | (0<<WGM13) | (0<<WGM12) | (0<<CS12) | (0<<CS11) | (0<<CS10);
+    TCNT1H=0x00;
+    TCNT1L=0x00;
+    ICR1H=0x00;
+    ICR1L=0x00;
+    OCR1AH=0x00;
+    OCR1AL=0x00;
+    OCR1BH=0x00;
+    OCR1BL=0x00;
+
+    // Timer/Counter 2 initialization
+    // Clock source: System Clock
+    // Clock value: Timer2 Stopped
+    // Mode: Normal top=0xFF
+    // OC2 output: Disconnected
+    ASSR=0<<AS2;
+    TCCR2=(0<<PWM2) | (0<<COM21) | (0<<COM20) | (0<<CTC2) | (0<<CS22) | (0<<CS21) | (0<<CS20);
+    TCNT2=0x00;
+    OCR2=0x00;
+
+    // Timer(s)/Counter(s) Interrupt(s) initialization
+    TIMSK=(0<<OCIE2) | (0<<TOIE2) | (0<<TICIE1) | (0<<OCIE1A) | (0<<OCIE1B) | (0<<TOIE1) | (0<<TOIE0);
+
+    // External Interrupt(s) initialization
+    // INT0: Off
+    // INT1: Off
+    MCUCR=(0<<ISC11) | (0<<ISC10) | (0<<ISC01) | (0<<ISC00);
+
+    // USART initialization
+    // USART disabled
+    UCSRB=(0<<RXCIE) | (0<<TXCIE) | (0<<UDRIE) | (0<<RXEN) | (0<<TXEN) | (0<<UCSZ2) | (0<<RXB8) | (0<<TXB8);
+
+
+    // Analog Comparator initialization
+    // Analog Comparator: On
+    // The Analog Comparator's positive input is
+    // connected to the AIN0 pin
+    // The Analog Comparator's negative input is
+    // connected to the AIN1 pin
+    // Interrupt on Rising Output Edge
+    // Analog Comparator Input Capture by Timer/Counter 1: Off
+    ACSR=(0<<ACD) | (0<<ACBG) | (0<<ACO) | (0<<ACI) | (1<<ACIE) | (0<<ACIC) | (1<<ACIS1) | (1<<ACIS0);
+    SFIOR=(0<<ACME);
+    
+    // ADC initialization
+    // ADC Clock frequency: 500.000 kHz
+    // ADC Voltage Reference: AREF pin
+    ADMUX=ADC_VREF_TYPE;
+    ADCSRA=(1<<ADEN) | (0<<ADSC) | (0<<ADFR) | (0<<ADIF) | (0<<ADIE) | (1<<ADPS2) | (0<<ADPS1) | (0<<ADPS0);
+    SFIOR=(0<<ACME);
+
+    // SPI initialization
+    // SPI disabled
+    SPCR=(0<<SPIE) | (0<<SPE) | (0<<DORD) | (0<<MSTR) | (0<<CPOL) | (0<<CPHA) | (0<<SPR1) | (0<<SPR0);
+
+    // TWI initialization
+    // TWI disabled
+    TWCR=(0<<TWEA) | (0<<TWSTA) | (0<<TWSTO) | (0<<TWEN) | (0<<TWIE);
+    
+    // Watchdog Timer initialization
+    // Watchdog Timer Prescaler: OSC/1024k
+    #pragma optsize-
+    WDTCR=(1<<WDCE) | (1<<WDE) | (1<<WDP2) | (1<<WDP1) | (0<<WDP0);
+    WDTCR=(0<<WDCE) | (1<<WDE) | (1<<WDP2) | (1<<WDP1) | (0<<WDP0);
+    #ifdef _OPTIMIZE_SIZE_
+    #pragma optsize+
+    #endif
+
+    // Global enable interrupts
+    #asm("sei")
+            
+    BEEP = ON;
+    delay_ms(50);
+    BEEP = OFF; 
+    delay_ms(200);
+    BEEP = ON;
+    delay_ms(50);
+    BEEP = OFF; 
+    
+    #asm("wdr")  
+    
+    Set_Turn = Storage_Turn;
+    
+    Ratio =  Storage_Ratio;
+        
+}
+
+unsigned char check_level(void)
+{
+    float level;
+    level = read_adc(LEVEL_CHANNEL);
+    
+    if(level < 4.5)
+    {
+        return(1);
+    }
+    else
+    {
+        return(0);
+    }
+}
+
+void main(void)
+{
+    unsigned char count = 0, pump_manual = 0;
+    unsigned int i, amount_delay;
+    unsigned char level;
+    unsigned char temperature;
+     
+    Setting();
+/*    
+    while(1)
+    {
+        temperature = read_temperature();
+        Display(temperature);
+        delay_ms(200);
+    } 
+*/        
+    while (1)
+    {
+        Begin:
+        
+        Display(Set_Turn); 
+               
+        count = 0;
+        
+        #asm("wdr") 
+  
+        if(!UP)
+        {   
+            BEEP = ON;
+            delay_ms(50);
+            
+            while(!UP)
+            {
+                #asm("wdr")
+            }
+            
+            BEEP = OFF; 
+            
+            if(pump_manual == 0)
+            {   
+                if((Set_Turn * Ratio) < 300)
+                {      
+                    Set_Turn++;
+                    Storage_Turn = Set_Turn; 
+                }
+            }
+        }
+        if(!DOWN)
+        {
+            BEEP = ON;
+            delay_ms(50);
+            BEEP = OFF;
+            
+            while(!DOWN)
+            { 
+                #asm("wdr")
+                delay_ms(10);
+                count++;
+                if(count > 100)
+                {  
+                    count = 0;
+                    MOTOR_PUMP = ON;
+                    while(!DOWN)
+                    {
+                        #asm("wdr")
+                    }
+                    MOTOR_PUMP = OFF; 
+                    pump_manual = 1;
+                }                                            
+            }
+            
+            if(pump_manual == 0)
+            {            
+                if(Set_Turn >= 1)
+                {
+                    Set_Turn--;    
+                }
+                if(Set_Turn == 0) Set_Turn = 99;
+                
+                Storage_Turn = Set_Turn;
+            } 
+                    
+        }
+        
+        if(!START)
+        {
+            BEEP = ON;
+            delay_ms(50);
+            BEEP = OFF;
+            #asm("wdr")
+            while(!START)
+            { 
+                delay_ms(10);
+                count++;
+                if(count > 100)
+                {  
+                    count = 0;
+                    
+                    BEEP = ON;
+                    delay_ms(50);
+                    BEEP = OFF;
+                    
+                    while(!START)
+                    {
+                        #asm("wdr")
+                    }
+                    delay_ms(500);
+                    
+                    while(1)
+                    {
+                        Display(Ratio);
+                        #asm("wdr")
+                        if(!UP)
+                        {   
+                            BEEP = ON;
+                            delay_ms(50);
+                            while(!UP)
+                            {
+                                #asm("wdr")
+                            }
+                            BEEP = OFF;
+                            
+                            if((Set_Turn * Ratio) < 300)
+                            {
+                                Ratio++;
+                                Storage_Ratio = Ratio;
+                            }                        
+                            
+                        }
+                        if(!DOWN)
+                        {   
+                            BEEP = ON;
+                            delay_ms(50);
+                            while(!DOWN)
+                            {
+                                #asm("wdr")
+                            }
+                            BEEP = OFF;
+                            
+                            if(Ratio > 2)
+                            {
+                                Ratio--;
+                                Storage_Ratio = Ratio;
+                            }                        
+                            
+                        }
+                        if(!START)
+                        {
+                            BEEP = ON;
+                            delay_ms(50);
+                            while(!START)
+                            {
+                                #asm("wdr")
+                            }
+                            BEEP = OFF; 
+                            
+                            goto Begin;
+                        }
+                        delay_ms(100);
+                    }
+                                        
+                }                                            
+            }
+            
+            level = check_level();
+            
+            temperature = read_temperature();
+            
+            Display(temperature);
+            
+            delay_ms(2000); 
+            
+            if((level == 0) || (temperature > 50) || (temperature < 40))
+            {
+                BEEP = ON;
+                delay_ms(50);
+                BEEP = OFF; 
+                delay_ms(200);
+                BEEP = ON;
+                delay_ms(50);
+                BEEP = OFF;
+                delay_ms(200);
+                BEEP = ON;
+                delay_ms(50);
+                BEEP = OFF;  
+                
+                goto Begin;
+            }
+            
+            MOTOR_SW = ON;
+            delay_ms(500);
+            
+            while(Turn < Set_Turn)
+            {
+                Display(Turn); 
+                delay_ms(50);
+            }
+            
+            Turn = 0;
+            
+            MOTOR_SW = OFF;
+            delay_ms(500);
+             
+            if(pump_manual == 0)
+            {
+                MOTOR_PUMP = ON;
+                              
+                amount_delay = (unsigned int)(Set_Turn * Ratio / 25);
+                
+                for(i = 0; i < amount_delay ; i++)
+                {
+                    delay_ms(1000);
+                }
+                
+                MOTOR_PUMP = OFF;  
+            }
+                        
+            MOTOR_BLEND = ON;
+            
+            Display(Set_Turn);  
+             
+            for(i = 0; i < 10 ; i++)
+            {
+                delay_ms(1000);            
+            } 
+            
+            MOTOR_BLEND = OFF; 
+            
+            pump_manual = 0; 
+        }        
+        
+        delay_ms(100);
+    }
+}

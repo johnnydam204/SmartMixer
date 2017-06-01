@@ -1,0 +1,12 @@
+Output: NC Drill Files
+Type  : NC Drill
+From  : Project [LED7 SEGMENT.PrjPcb]
+   Generated File[LED7 SEGMENT.TXT]
+   Generated File[LED7 SEGMENT.LDP]
+   Generated File[LED7 SEGMENT.DRR]
+
+
+Files Generated   : 3
+Documents Printed : 0
+
+Finished Output Generation At 9:09:43 PM On 03/15/2016

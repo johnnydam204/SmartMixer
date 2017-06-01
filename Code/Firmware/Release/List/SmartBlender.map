@@ -1,0 +1,33 @@
+RAM Allocation [bytes]
+Variable                                                                          Address   Size
+------------------------------------------------------------------------------------------------
+DIGIT                                                                             0x0160      10
+Rth                                                                               0x016A       4
+T                                                                                 0x016E       4
+_seed                                                                             0x0172       4
+
+EEPROM Allocation [bytes]
+Variable                                                                          Address   Size
+------------------------------------------------------------------------------------------------
+Storage_Turn                                                                      0x0010       1
+Storage_Ratio                                                                     0x0020       1
+
+Register Allocation
+Variable                                                                          Register  Size
+------------------------------------------------------------------------------------------------
+Set_Turn                                                                          R5           1
+Turn                                                                              R4           1
+Ratio                                                                             R7           1
+
+FLASH Allocation [words]
+Function                                                                          Address   Size
+------------------------------------------------------------------------------------------------
+ana_comp_isr                                                                      0x00056     29
+read_temperature                                                                  0x00073     73
+shift_data                                                                        0x000BC     24
+Display                                                                           0x000D4     20
+read_adc                                                                          0x000E8     62
+Setting                                                                           0x00126     63
+check_level                                                                       0x00165     15
+main                                                                              0x00174    200
+log                                                                               0x0023C    103
